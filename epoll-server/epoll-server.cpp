@@ -76,7 +76,7 @@ void HandleClientSock(int epollfd, const epoll_event& event) {
                 break;
             }
             ret = client_pack.WriteSock(client_sock);
-            cerr<<"write "<<ret<< " bytes to" << client_pack.GetClientIP() << endl;
+            cerr<<"write "<<ret<< " bytes to " << client_pack.GetClientIP() << endl;
             if (ret == -1) {
                 CloseClientSock(epollfd, client_sock);
                 break;
