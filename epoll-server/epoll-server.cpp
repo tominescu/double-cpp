@@ -1,3 +1,6 @@
+#include "package.h"
+#include "common.h"
+
 #include <iostream>
 #include <unistd.h>
 #include <stdlib.h>
@@ -10,38 +13,98 @@
 #include <netinet/tcp.h>
 #include <string.h>
 #include <signal.h>
+#include <unordered_map>
+#include <sstream>
 
 using namespace std;
-
-#define handle_error(msg) \
-	do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
 const int DEFAULT_PORT = 9990;
 bool g_running = true;
 int g_client_num = 0;
-
+unordered_map<int, Package> g_client_data;
 
 void Usage(const string& name) {
 	cerr<<name<<" -p <listen_port>"<<endl;
 }
 
+void HandleListenSock(int epollfd, int listen_sock) {
+    while(true) {
+        sockaddr_in sin;
+        socklen_t socklen = sizeof(sockaddr);
+        int clientsock = accept(listen_sock, (sockaddr*)&sin, &socklen);
+        if (clientsock == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break;
+            }
+            handle_error("accept");
+        }
+        stringstream ss;
+        ss << inet_ntoa(sin.sin_addr) << ":" << ntohs(sin.sin_port);
+        string client_addr = ss.str();
+        cerr<<"New client from "<<client_addr<<endl;
+        SetNonBlock(clientsock);
+        SetSockBufSize(clientsock, 65536, 65536);
+        epoll_event ev;
+        ev.data.fd = clientsock;
+        ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
+        if (epoll_ctl(epollfd, EPOLL_CTL_ADD, clientsock, &ev) == -1) {
+            handle_error("client sock epoll_ctl");
+        }
+        g_client_num ++;
+        g_client_data[clientsock].SetClientIP(client_addr);
+    }
+}
+
+void CloseClientSock(int sock) {
+    cerr<<"close client "<<g_client_data[sock].GetClientIP()<<endl;
+    close(sock);
+    g_client_num --;
+    g_client_data.erase(sock);
+}
+
+void HandleClientSock(int epollfd, const epoll_event& event) {
+    int ret = 0;
+    int client_sock = event.data.fd;
+    Package& client_pack = g_client_data[client_sock];
+    if (event.events & EPOLLIN || event.events & EPOLLOUT) {
+        while (true) {
+            ret = client_pack.ReadSock(client_sock);
+            cerr<<"read "<<ret<< " bytes from " << client_pack.GetClientIP() << endl;
+            if (ret == -1) {
+                CloseClientSock(client_sock);
+                break;
+            }
+            ret = client_pack.WriteSock(client_sock);
+            cerr<<"write "<<ret<< " bytes to" << client_pack.GetClientIP() << endl;
+            if (ret == -1) {
+                CloseClientSock(client_sock);
+                break;
+            } else if (ret == 0) {
+                break;
+            }
+        }
+    } else {
+        cerr<<client_pack.GetClientIP()<<" other event happens"<<endl;
+        CloseClientSock(client_sock);
+    }
+}
+
 int MainLoop(int epollfd, int listen_sock) {
-	struct epoll_event *e = new epoll_event[g_client_num + 1];
+	epoll_event *e = new epoll_event[g_client_num + 1];
 	int ret = epoll_wait(epollfd, e, g_client_num + 1, -1);
 	if (ret == -1) {
-		cerr<"epoll_wait failed."<<endl;
-		return -1;
-	}
-	if (ret == 0) {
-		return 0;
+        perror("epoll_wait");
+        return 0;
 	}
 	for (int i = 0; i < ret; i++) {
 		if (e[i].data.fd == listen_sock) {
-			HandleListenSock(listen_sock);
+            HandleListenSock(epollfd, listen_sock);
 		} else {
-			HandleClientSock(e[i]);
+            HandleClientSock(epollfd, e[i]);
 		}
 	}
+    delete[] e;
+    return 0;
 }
 
 void SignalHandler(int signum) {
@@ -52,7 +115,7 @@ void SignalHandler(int signum) {
 int main(int argc, char** argv) {
 	int ch;
 	int listen_port = -1;
-	while (ch = getopt(argc, argv, "hp:") != -1) {
+	while ((ch = getopt(argc, argv, "hp:")) != -1) {
 		switch (ch) {
 			case 'h':
 				Usage(argv[0]);
@@ -83,17 +146,15 @@ int main(int argc, char** argv) {
 		handle_error("setsockopt");
 	}
 
-	int flag = fcntl(listen_sock, F_GETFL, 0);
-	flag |= O_NONBLOCK;
-	fcntl(listen_sock, F_SETFL, flag);
+    SetNonBlock(listen_sock);
 
-	struct sockaddr_in sin;
+	sockaddr_in sin;
 	memset(&sin, 0, sizeof(sin));
 	sin.sin_family = AF_INET;
 	sin.sin_addr.s_addr = htonl(INADDR_ANY);
 	sin.sin_port = htons(listen_port);
 
-	if (bind(listen_sock, (struct sockaddr*)&sin, sizeof(sin)) == -1) {
+	if (bind(listen_sock, (sockaddr*)&sin, sizeof(sin)) == -1) {
 		handle_error("bind");
 	}
 
@@ -106,7 +167,7 @@ int main(int argc, char** argv) {
 		handle_error("epoll_create");
 	}
 
-	struct epoll_event ev;
+	epoll_event ev;
 	ev.data.fd = listen_sock;
 	ev.events = EPOLLIN | EPOLLET;
 
