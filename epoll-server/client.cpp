@@ -36,7 +36,7 @@ void MainLoop(int sock) {
                 break;
             }
         }
-        if (nwrite < line.size()) {
+        if (nwrite < (ssize_t)line.size()) {
             cerr<<"Server busy, send ["<<line.substr(0,nwrite)<<"]"<<endl;
         }
 

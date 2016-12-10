@@ -27,3 +27,9 @@
 *.exe
 *.out
 *.app
+
+.Building.lock
+.sconsign.dblite
+blade-bin
+build*_release/
+build*_debug/

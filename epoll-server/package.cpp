@@ -26,6 +26,7 @@ Package& Package::operator=(const Package& p) {
     memcpy(buf_, p.buf_, MAX_PACKAGE_SIZE);
     read_offset_ = p.read_offset_;
     write_offset_ = p.write_offset_;
+	return *this;
 }
 
 Package::~Package() {
