@@ -40,9 +40,13 @@ void HandleListenSock(int epollfd, int listen_sock) {
         }
         stringstream ss;
         char buf[1024];
+        bzero(buf, sizeof(buf));
         socklen_t len = sizeof(sin6.sin6_addr);
-        ss << inet_ntop(PF_INET6, (const void*)&sin6.sin6_addr, buf, len) << ":" << ntohs(sin6.sin6_port);
-        string client_addr = ss.str();
+        string client_addr;
+        if (inet_ntop(PF_INET6, (const void*)&sin6.sin6_addr, buf, len) != NULL) {
+            ss << buf << ":" << ntohs(sin6.sin6_port);
+            client_addr = ss.str();
+        }
         cerr<<"New client from "<<client_addr<<endl;
         SetNonBlock(clientsock);
         SetSockBufSize(clientsock, 65536, 65536);
