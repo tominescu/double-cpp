@@ -22,28 +22,58 @@ void Usage(const string& name) {
 }
 
 bool GetIP(const string& remote_addr, string& ip) {
-    sockaddr_in sin;
-    int ret = inet_pton(AF_INET, remote_addr.c_str(), &sin);
+    sockaddr_in6 sin;
+    int ret = inet_pton(AF_INET6, remote_addr.c_str(), &sin);
     if (ret > 0) {
         /* remote addr is an ip address */
         ip = remote_addr;
         return true;
     }
-    hostent *he;
-    in_addr **in_addr_list;
-    he = gethostbyname(remote_addr.c_str());
-    if (he == NULL) {
+
+    /* resolve ip address */
+    addrinfo hints;
+    addrinfo *res, *ressave;
+    bzero(&hints, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
+	hints.ai_socktype = SOCK_STREAM; /* Datagram socket */
+	hints.ai_flags = 0;
+    hints.ai_protocol = 0;          /* Any protocol */
+
+    int n = 0;
+    if ((n = getaddrinfo(remote_addr.c_str(), "http", &hints, &res)) != 0) {
         return false;
     }
-    in_addr_list = (in_addr**)he->h_addr_list;
-    for (int i = 0; in_addr_list[i] != NULL; i++) {
-        ip = inet_ntoa(*in_addr_list[i]);
-        ret = inet_pton(AF_INET, ip.c_str(), &sin);
-        if (ret > 0) {
-            return true;
+
+    ressave = res;
+    char str[INET6_ADDRSTRLEN];
+    bool found = false;
+    while (res != NULL) {
+        switch (res->ai_family) {
+            case AF_INET:
+                sockaddr_in* in;
+                in = (sockaddr_in*) res->ai_addr;
+                inet_ntop(AF_INET, &in->sin_addr, str, sizeof(str));
+                found = true;
+                break;
+            case AF_INET6:
+                sockaddr_in6* in6;
+                in6 = (sockaddr_in6*) res->ai_addr;
+                inet_ntop(AF_INET6, &in6->sin6_addr, str, sizeof(str));
+                found = true;
+                break;
+            default:
+                cerr<<"Unknown family"<<endl;
+                break;
+        }
+        if (found) {
+            break;
         }
     }
-    return false;
+    freeaddrinfo(ressave);
+    if (found) {
+        ip = str;
+    }
+    return found;
 }
 
 void MainLoop(int sock) {
@@ -114,7 +144,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    int sock = socket(AF_INET6, SOCK_STREAM, 0);
     if (sock == -1) {
         handle_error("socket");
     }
@@ -125,13 +155,13 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    sockaddr_in sin;
+    sockaddr_in6 sin;
     bzero(&sin, sizeof(sin));
-    sin.sin_family = AF_INET;
-    if (inet_aton(remote_ip.c_str(), &sin.sin_addr) == -1) {
-        handle_error("inet_aton");
+    sin.sin6_family = AF_INET6;
+    if (inet_pton(AF_INET6, remote_ip.c_str(), (void*)&sin.sin6_addr) == -1) {
+        handle_error("inet_pton");
     }
-    sin.sin_port = htons(remote_port);
+    sin.sin6_port = htons(remote_port);
 
     if (connect(sock, (sockaddr*)&sin, sizeof(sin)) == -1) {
         stringstream ss;

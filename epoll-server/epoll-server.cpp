@@ -29,9 +29,9 @@ void Usage(const string& name) {
 
 void HandleListenSock(int epollfd, int listen_sock) {
     while(true) {
-        sockaddr_in sin;
+        sockaddr_in6 sin6;
         socklen_t socklen = sizeof(sockaddr);
-        int clientsock = accept(listen_sock, (sockaddr*)&sin, &socklen);
+        int clientsock = accept(listen_sock, (sockaddr*)&sin6, &socklen);
         if (clientsock == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 break;
@@ -39,7 +39,9 @@ void HandleListenSock(int epollfd, int listen_sock) {
             handle_error("accept");
         }
         stringstream ss;
-        ss << inet_ntoa(sin.sin_addr) << ":" << ntohs(sin.sin_port);
+        char buf[1024];
+        socklen_t len = sizeof(sin6.sin6_addr);
+        ss << inet_ntop(PF_INET6, (const void*)&sin6.sin6_addr, buf, len) << ":" << ntohs(sin6.sin6_port);
         string client_addr = ss.str();
         cerr<<"New client from "<<client_addr<<endl;
         SetNonBlock(clientsock);
@@ -134,7 +136,7 @@ int main(int argc, char** argv) {
         listen_port = DEFAULT_PORT;
     }
 
-    int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+    int listen_sock = socket(PF_INET6, SOCK_STREAM, 0);
     if (listen_sock == -1) {
         handle_error("socket");
     }
@@ -149,13 +151,13 @@ int main(int argc, char** argv) {
 
     SetNonBlock(listen_sock);
 
-    sockaddr_in sin;
-    memset(&sin, 0, sizeof(sin));
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = htonl(INADDR_ANY);
-    sin.sin_port = htons(listen_port);
+    sockaddr_in6 sin6;
+    memset(&sin6, 0, sizeof(sin6));
+    sin6.sin6_family = PF_INET6;
+    sin6.sin6_addr = in6addr_any;
+    sin6.sin6_port = htons(listen_port);
 
-    if (bind(listen_sock, (sockaddr*)&sin, sizeof(sin)) == -1) {
+    if (bind(listen_sock, (sockaddr*)&sin6, sizeof(sin6)) == -1) {
         handle_error("bind");
     }
 
@@ -176,7 +178,7 @@ int main(int argc, char** argv) {
         handle_error("epoll_ctl");
     }
 
-    cerr<<"Server listen on 0.0.0.0:"<<listen_port<<endl;
+    cerr<<"Server listen on :::"<<listen_port<<endl;
     signal(SIGPIPE, SIG_IGN);
     signal(SIGTERM, &SignalHandler);
     signal(SIGINT, &SignalHandler);
