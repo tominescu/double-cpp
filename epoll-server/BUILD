@@ -4,9 +4,6 @@ cc_binary(
         'common.cpp',
         'epoll-server.cpp',
         'package.cpp'
-    ],
-    optimize = [
-        '-std=c++11',
     ]
 )
 
@@ -15,8 +12,5 @@ cc_binary(
     srcs = [
         'client.cpp',
         'common.cpp'
-    ],
-    optimize = [
-        '-std=c++11',
     ]
 )
