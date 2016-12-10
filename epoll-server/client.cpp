@@ -16,7 +16,7 @@ const char* DEFAULT_ADDR = "127.0.0.1";
 const int DEFAULT_PORT = 9990;
 
 void Usage(const string& name) {
-	cerr<<name<<" -p <server_port> server_ip"<<endl;
+    cerr<<name<<" -p <server_port> server_ip"<<endl;
 }
 
 void MainLoop(int sock) {
@@ -57,26 +57,26 @@ void MainLoop(int sock) {
 }
 
 int main(int argc, char** argv) {
-	int ch;
-	int remote_port = -1;
+    int ch;
+    int remote_port = -1;
     string remote_addr;
-	while ((ch = getopt(argc, argv, "hp:")) != -1) {
-		switch (ch) {
-			case 'h':
-				Usage(argv[0]);
-				exit(0);
-			case 'p':
-				remote_port = atoi(optarg);
-				break;
-			default:
+    while ((ch = getopt(argc, argv, "hp:")) != -1) {
+        switch (ch) {
+            case 'h':
+                Usage(argv[0]);
+                exit(0);
+            case 'p':
+                remote_port = atoi(optarg);
+                break;
+            default:
                 Usage(argv[0]);
                 exit(1);
-		}
-	}
+        }
+    }
 
-	if (remote_port <= 0 || remote_port >= 65536) {
-		remote_port = DEFAULT_PORT;
-	}
+    if (remote_port <= 0 || remote_port >= 65536) {
+        remote_port = DEFAULT_PORT;
+    }
 
     if (optind == argc - 1) {
         remote_addr = argv[optind];

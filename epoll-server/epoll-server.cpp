@@ -24,7 +24,7 @@ int g_client_num = 0;
 unordered_map<int, Package> g_client_data;
 
 void Usage(const string& name) {
-	cerr<<name<<" -p <listen_port>"<<endl;
+    cerr<<name<<" -p <listen_port>"<<endl;
 }
 
 void HandleListenSock(int epollfd, int listen_sock) {
@@ -55,9 +55,10 @@ void HandleListenSock(int epollfd, int listen_sock) {
     }
 }
 
-void CloseClientSock(int sock) {
+void CloseClientSock(int epollfd, int sock) {
     cerr<<"close client "<<g_client_data[sock].GetClientIP()<<endl;
     close(sock);
+    epoll_ctl(epollfd, EPOLL_CTL_DEL, sock, NULL);
     g_client_num --;
     g_client_data.erase(sock);
 }
@@ -71,13 +72,13 @@ void HandleClientSock(int epollfd, const epoll_event& event) {
             ret = client_pack.ReadSock(client_sock);
             cerr<<"read "<<ret<< " bytes from " << client_pack.GetClientIP() << endl;
             if (ret == -1) {
-                CloseClientSock(client_sock);
+                CloseClientSock(epollfd, client_sock);
                 break;
             }
             ret = client_pack.WriteSock(client_sock);
             cerr<<"write "<<ret<< " bytes to" << client_pack.GetClientIP() << endl;
             if (ret == -1) {
-                CloseClientSock(client_sock);
+                CloseClientSock(epollfd, client_sock);
                 break;
             } else if (ret == 0) {
                 break;
@@ -85,107 +86,107 @@ void HandleClientSock(int epollfd, const epoll_event& event) {
         }
     } else {
         cerr<<client_pack.GetClientIP()<<" other event happens"<<endl;
-        CloseClientSock(client_sock);
+        CloseClientSock(epollfd, client_sock);
     }
 }
 
 int MainLoop(int epollfd, int listen_sock) {
-	epoll_event *e = new epoll_event[g_client_num + 1];
-	int ret = epoll_wait(epollfd, e, g_client_num + 1, -1);
-	if (ret == -1) {
+    epoll_event *e = new epoll_event[g_client_num + 1];
+    int ret = epoll_wait(epollfd, e, g_client_num + 1, -1);
+    if (ret == -1) {
         perror("epoll_wait");
         return 0;
-	}
-	for (int i = 0; i < ret; i++) {
-		if (e[i].data.fd == listen_sock) {
+    }
+    for (int i = 0; i < ret; i++) {
+        if (e[i].data.fd == listen_sock) {
             HandleListenSock(epollfd, listen_sock);
-		} else {
+        } else {
             HandleClientSock(epollfd, e[i]);
-		}
-	}
+        }
+    }
     delete[] e;
     return 0;
 }
 
 void SignalHandler(int signum) {
-	cerr<<"Server received signal "<<signum<<endl;
-	g_running = false;
+    cerr<<"Server received signal "<<signum<<endl;
+    g_running = false;
 }
 
 int main(int argc, char** argv) {
-	int ch;
-	int listen_port = -1;
-	while ((ch = getopt(argc, argv, "hp:")) != -1) {
-		switch (ch) {
-			case 'h':
-				Usage(argv[0]);
-				return 0;
-			case 'p':
-				listen_port = atoi(optarg);
-				break;
-			default:
-				Usage(argv[0]);
-				return 1;
-		}
-	}
+    int ch;
+    int listen_port = -1;
+    while ((ch = getopt(argc, argv, "hp:")) != -1) {
+        switch (ch) {
+            case 'h':
+                Usage(argv[0]);
+                return 0;
+            case 'p':
+                listen_port = atoi(optarg);
+                break;
+            default:
+                Usage(argv[0]);
+                return 1;
+        }
+    }
 
-	if (listen_port <= 0 || listen_port >= 65536) {
-		listen_port = DEFAULT_PORT;
-	}
+    if (listen_port <= 0 || listen_port >= 65536) {
+        listen_port = DEFAULT_PORT;
+    }
 
-	int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (listen_sock == -1) {
-		handle_error("socket");
-	}
+    int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (listen_sock == -1) {
+        handle_error("socket");
+    }
 
-	const int on = 1;
-	if (setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1) {
-		handle_error("setsockopt");
-	}
-	if (setsockopt(listen_sock, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on)) == -1) {
-		handle_error("setsockopt");
-	}
+    const int on = 1;
+    if (setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == -1) {
+        handle_error("setsockopt");
+    }
+    if (setsockopt(listen_sock, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on)) == -1) {
+        handle_error("setsockopt");
+    }
 
     SetNonBlock(listen_sock);
 
-	sockaddr_in sin;
-	memset(&sin, 0, sizeof(sin));
-	sin.sin_family = AF_INET;
-	sin.sin_addr.s_addr = htonl(INADDR_ANY);
-	sin.sin_port = htons(listen_port);
+    sockaddr_in sin;
+    memset(&sin, 0, sizeof(sin));
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = htonl(INADDR_ANY);
+    sin.sin_port = htons(listen_port);
 
-	if (bind(listen_sock, (sockaddr*)&sin, sizeof(sin)) == -1) {
-		handle_error("bind");
-	}
+    if (bind(listen_sock, (sockaddr*)&sin, sizeof(sin)) == -1) {
+        handle_error("bind");
+    }
 
-	if (listen(listen_sock, 1024) == -1) {
-		handle_error("listen");
-	}
+    if (listen(listen_sock, 1024) == -1) {
+        handle_error("listen");
+    }
 
-	int epollfd = epoll_create(256);
-	if (epollfd == -1) {
-		handle_error("epoll_create");
-	}
+    int epollfd = epoll_create(256);
+    if (epollfd == -1) {
+        handle_error("epoll_create");
+    }
 
-	epoll_event ev;
-	ev.data.fd = listen_sock;
-	ev.events = EPOLLIN | EPOLLET;
+    epoll_event ev;
+    ev.data.fd = listen_sock;
+    ev.events = EPOLLIN | EPOLLET;
 
-	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listen_sock, &ev) == -1) {
-		handle_error("epoll_ctl");
-	}
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listen_sock, &ev) == -1) {
+        handle_error("epoll_ctl");
+    }
 
-	cerr<<"Server listen on 0.0.0.0:"<<listen_port<<endl;
-	signal(SIGPIPE, SIG_IGN);
-	signal(SIGTERM, &SignalHandler);
-	signal(SIGINT, &SignalHandler);
-	int ret = 0;
-	while (g_running) {
-		ret = MainLoop(epollfd, listen_sock);
-		if (ret != 0) {
-			break;
-		}
-	}
-	cerr<<"Server exit with code:"<<ret<<endl;
-	return -1;
+    cerr<<"Server listen on 0.0.0.0:"<<listen_port<<endl;
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGTERM, &SignalHandler);
+    signal(SIGINT, &SignalHandler);
+    int ret = 0;
+    while (g_running) {
+        ret = MainLoop(epollfd, listen_sock);
+        if (ret != 0) {
+            break;
+        }
+    }
+    cerr<<"Server exit with code:"<<ret<<endl;
+    return -1;
 }

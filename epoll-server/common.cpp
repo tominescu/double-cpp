@@ -4,9 +4,9 @@
 #include <sys/socket.h>
 
 void SetNonBlock(int fd) {
-	int flag = fcntl(fd, F_GETFL, 0);
-	flag |= O_NONBLOCK;
-	fcntl(fd, F_SETFL, flag);
+    int flag = fcntl(fd, F_GETFL, 0);
+    flag |= O_NONBLOCK;
+    fcntl(fd, F_SETFL, flag);
 }
 
 void SetSockBufSize(int sock, size_t recv_buf_size, size_t send_buf_size) {
