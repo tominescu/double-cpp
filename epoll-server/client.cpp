@@ -16,47 +16,58 @@ using namespace std;
 
 const char* DEFAULT_ADDR = "127.0.0.1";
 const int DEFAULT_PORT = 9990;
+char g_buf[1024];
 
 void Usage(const string& name) {
     cerr<<name<<" -p <server_port> server_ip"<<endl;
 }
 
-void MainLoop(int sock) {
+bool MainLoop(int sock) {
+    fd_set rdfds;
+    FD_SET(0, &rdfds);
+    FD_SET(sock, &rdfds);
+    int ret = select(sock + 1, &rdfds, NULL, NULL, NULL);
+    if (ret <= 0) {
+        handle_error("select");
+    }
     string line;
-    char buf[1024];
-    while (true) {
-        cout<<"> ";
-        if (!getline(cin, line)) {
-            break;
-        }
-        line += '\n';
-        ssize_t nwrite = send(sock, line.c_str(), line.size(), 0);
-        if (nwrite == -1) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                cerr<<"Server busy, send nothing."<<endl;
-            } else {
-                perror("send");
-                break;
+    if (FD_ISSET(0, &rdfds)) {
+        if(getline(cin, line)) {
+            line += '\n';
+            ssize_t nwrite = send(sock, line.c_str(), line.size(), 0);
+            if (nwrite == -1) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    cerr<<"Server busy, send nothing."<<endl;
+                } else {
+                    perror("send");
+                    return false;
+                }
             }
+            if (nwrite < (ssize_t)line.size()) {
+                cerr<<"Server busy, send ["<<line.substr(0,nwrite)<<"]"<<endl;
+            }
+        } else {
+            return false;
         }
-        if (nwrite < (ssize_t)line.size()) {
-            cerr<<"Server busy, send ["<<line.substr(0,nwrite)<<"]"<<endl;
-        }
+    }
 
-        ssize_t nread = recv(sock, buf, sizeof(buf), 0);
+    if (FD_ISSET(sock, &rdfds)) {
+        ssize_t nread = recv(sock, g_buf, sizeof(g_buf), 0);
         if (nread == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                continue;
+                return true;
             } else {
-                break;
+                return false;
             }
         } else if (nread == 0) {
             cerr<<"Lost connection from server."<<endl;
-            break;
+            return false;
         } else {
-            cout<<string(buf, nread)<<endl;
+            cout<<string(g_buf, nread);
         }
+   
     }
+    return true;
 }
 
 int main(int argc, char** argv) {
@@ -130,7 +141,7 @@ int main(int argc, char** argv) {
                 cerr<<"unknown family:"<<rp->ai_family<<endl;
                 break;
         }
-        //cerr<<"remote addr: "<<buf<<endl;
+        cerr<<"Trying "<<buf<<"..."<<endl;
         sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
         if (sock == -1) {
             perror("socket");
@@ -141,7 +152,8 @@ int main(int argc, char** argv) {
             perror("connect");
             continue;
         }
-        cerr<<"Connected to "<<buf<<":"<<remote_port<<endl;
+        cerr<<"Connected to "<<remote_addr<<":"<<remote_port<<endl;
+        cerr<<"Press Ctrl + D to quit."<<endl;
         break;
     }
     freeaddrinfo(res);
@@ -153,7 +165,7 @@ int main(int argc, char** argv) {
     SetNonBlock(sock);
     SetSockBufSize(sock, 65536, 65536);
 
-    MainLoop(sock);
+    while(MainLoop(sock));
     close(sock);
     cerr<<"Disonnected to "<<buf<<":"<<remote_port<<endl;
     return 0;
