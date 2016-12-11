@@ -1,4 +1,6 @@
 #include "package.h"
+#include "log.h"
+
 #include <iostream>
 #include <stdio.h>
 #include <string.h>
@@ -52,7 +54,7 @@ int Package::ReadSock(int sock) {
             return -1;
         }
     } else if (nread == 0) {
-        cerr<<client_ip_<<" closed connection."<<endl;
+        INFO_LOG("%s closed connection", client_ip_.c_str());
         return -1;
     } else {
         read_offset_ += nread;

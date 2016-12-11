@@ -1,5 +1,6 @@
 #include "package.h"
 #include "common.h"
+#include "log.h"
 
 #include <iostream>
 #include <unistd.h>
@@ -17,6 +18,8 @@
 #include <sstream>
 
 using namespace std;
+
+//#define DEBUG // enable debug log
 
 const int DEFAULT_PORT = 9990;
 bool g_running = true;
@@ -46,7 +49,7 @@ void HandleListenSock(int epollfd, int listen_sock) {
             ss << buf << ":" << ntohs(sin6.sin6_port);
             client_addr = ss.str();
         }
-        cerr<<"New client from "<<client_addr<<endl;
+        INFO_LOG("New client from %s", client_addr.c_str());
         SetNonBlock(clientsock);
         SetSockBufSize(clientsock, 65536, 65536);
         epoll_event ev;
@@ -61,7 +64,7 @@ void HandleListenSock(int epollfd, int listen_sock) {
 }
 
 void CloseClientSock(int epollfd, int sock) {
-    cerr<<"close client "<<g_client_data[sock].GetClientIP()<<endl;
+    INFO_LOG("Close client %s", g_client_data[sock].GetClientIP().c_str());
     close(sock);
     epoll_ctl(epollfd, EPOLL_CTL_DEL, sock, NULL);
     g_client_num --;
@@ -75,13 +78,13 @@ void HandleClientSock(int epollfd, const epoll_event& event) {
     if (event.events & EPOLLIN || event.events & EPOLLOUT) {
         while (true) {
             ret = client_pack.ReadSock(client_sock);
-            cerr<<"read "<<ret<< " bytes from " << client_pack.GetClientIP() << endl;
+            INFO_LOG("Read %d bytes from %s", ret, client_pack.GetClientIP().c_str());
             if (ret == -1) {
                 CloseClientSock(epollfd, client_sock);
                 break;
             }
             ret = client_pack.WriteSock(client_sock);
-            cerr<<"write "<<ret<< " bytes to " << client_pack.GetClientIP() << endl;
+            INFO_LOG("Write %d bytes to %s", ret, client_pack.GetClientIP().c_str());
             if (ret == -1) {
                 CloseClientSock(epollfd, client_sock);
                 break;
@@ -90,7 +93,7 @@ void HandleClientSock(int epollfd, const epoll_event& event) {
             }
         }
     } else {
-        cerr<<client_pack.GetClientIP()<<" other event happens"<<endl;
+        ERR_LOG("%s other event happens", client_pack.GetClientIP().c_str());
         CloseClientSock(epollfd, client_sock);
     }
 }
@@ -114,7 +117,7 @@ int MainLoop(int epollfd, int listen_sock) {
 }
 
 void SignalHandler(int signum) {
-    cerr<<"Server received signal "<<signum<<endl;
+    WARN_LOG("Server received signal %d", signum);
     g_running = false;
 }
 
@@ -181,7 +184,7 @@ int main(int argc, char** argv) {
         handle_error("epoll_ctl");
     }
 
-    cerr<<"Server listen on :::"<<listen_port<<endl;
+    INFO_LOG("Server listen on :::%d", listen_port);
     signal(SIGPIPE, SIG_IGN);
     signal(SIGTERM, &SignalHandler);
     signal(SIGINT, &SignalHandler);
@@ -192,6 +195,6 @@ int main(int argc, char** argv) {
             break;
         }
     }
-    cerr<<"Server exit with code:"<<ret<<endl;
+    INFO_LOG("Server exit with code:%d", ret);
     return -1;
 }
