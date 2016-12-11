@@ -30,7 +30,7 @@ void Usage(const string& name) {
 void HandleListenSock(int epollfd, int listen_sock) {
     while(true) {
         sockaddr_in6 sin6;
-        socklen_t socklen = sizeof(sockaddr);
+        socklen_t socklen = sizeof(sockaddr_in6);
         int clientsock = accept(listen_sock, (sockaddr*)&sin6, &socklen);
         if (clientsock == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -39,11 +39,10 @@ void HandleListenSock(int epollfd, int listen_sock) {
             handle_error("accept");
         }
         stringstream ss;
-        char buf[1024];
+        char buf[128];
         bzero(buf, sizeof(buf));
-        socklen_t len = sizeof(sin6.sin6_addr);
         string client_addr;
-        if (inet_ntop(PF_INET6, (const void*)&sin6.sin6_addr, buf, len) != NULL) {
+        if (inet_ntop(PF_INET6, (const void*)&sin6.sin6_addr, buf, sizeof(buf)) != NULL) {
             ss << buf << ":" << ntohs(sin6.sin6_port);
             client_addr = ss.str();
         }
