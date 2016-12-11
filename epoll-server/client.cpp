@@ -21,61 +21,6 @@ void Usage(const string& name) {
     cerr<<name<<" -p <server_port> server_ip"<<endl;
 }
 
-bool GetIP(const string& remote_addr, string& ip) {
-    sockaddr_in6 sin;
-    int ret = inet_pton(AF_INET6, remote_addr.c_str(), &sin);
-    if (ret > 0) {
-        /* remote addr is an ip address */
-        ip = remote_addr;
-        return true;
-    }
-
-    /* resolve ip address */
-    addrinfo hints;
-    addrinfo *res, *ressave;
-    bzero(&hints, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
-	hints.ai_socktype = SOCK_STREAM; /* Datagram socket */
-	hints.ai_flags = 0;
-    hints.ai_protocol = 0;          /* Any protocol */
-
-    int n = 0;
-    if ((n = getaddrinfo(remote_addr.c_str(), "http", &hints, &res)) != 0) {
-        return false;
-    }
-
-    ressave = res;
-    char str[INET6_ADDRSTRLEN];
-    bool found = false;
-    while (res != NULL) {
-        switch (res->ai_family) {
-            case AF_INET:
-                sockaddr_in* in;
-                in = (sockaddr_in*) res->ai_addr;
-                inet_ntop(AF_INET, &in->sin_addr, str, sizeof(str));
-                found = true;
-                break;
-            case AF_INET6:
-                sockaddr_in6* in6;
-                in6 = (sockaddr_in6*) res->ai_addr;
-                inet_ntop(AF_INET6, &in6->sin6_addr, str, sizeof(str));
-                found = true;
-                break;
-            default:
-                cerr<<"Unknown family"<<endl;
-                break;
-        }
-        if (found) {
-            break;
-        }
-    }
-    freeaddrinfo(ressave);
-    if (found) {
-        ip = str;
-    }
-    return found;
-}
-
 void MainLoop(int sock) {
     string line;
     char buf[1024];
@@ -84,6 +29,7 @@ void MainLoop(int sock) {
         if (!getline(cin, line)) {
             break;
         }
+        line += '\n';
         ssize_t nwrite = send(sock, line.c_str(), line.size(), 0);
         if (nwrite == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -144,37 +90,71 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    int sock = socket(AF_INET6, SOCK_STREAM, 0);
-    if (sock == -1) {
-        handle_error("socket");
-    }
+    /* resove address and connect */
+    addrinfo hints, *res, *rp;
+    bzero(&hints, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = 0;
+    hints.ai_protocol = 0;
 
-    string remote_ip;
-    if (!GetIP(remote_addr, remote_ip)) {
-        cerr<<"can't resolve name of host "<<remote_addr<<endl;
+    char remote_port_str[8];
+    snprintf(remote_port_str, sizeof(remote_port_str), "%d", remote_port);
+
+    int ret = getaddrinfo(remote_addr.c_str(), remote_port_str, &hints, &res);
+    if (ret != 0) {
+        cerr<<"getaddrinfo:"<<gai_strerror(ret)<<endl;
         return -1;
     }
 
-    sockaddr_in6 sin;
-    bzero(&sin, sizeof(sin));
-    sin.sin6_family = AF_INET6;
-    if (inet_pton(AF_INET6, remote_ip.c_str(), (void*)&sin.sin6_addr) == -1) {
-        handle_error("inet_pton");
-    }
-    sin.sin6_port = htons(remote_port);
+    char buf[INET6_ADDRSTRLEN];
+    bzero(buf, sizeof(buf));
 
-    if (connect(sock, (sockaddr*)&sin, sizeof(sin)) == -1) {
-        stringstream ss;
-        ss << "connect to "<<remote_ip<<":"<<remote_port;
-        handle_error(ss.str().c_str());
+    int sock = -1;
+
+    for (rp = res; rp != NULL; rp = rp->ai_next) {
+        switch (rp->ai_family) {
+            case AF_INET:
+                if (inet_ntop(AF_INET, &((sockaddr_in*)rp->ai_addr)->sin_addr, buf, sizeof(buf)) == NULL) {
+                    perror("inet_ntop");
+                    exit(1);
+                }
+                break;
+            case AF_INET6:
+                if (inet_ntop(AF_INET6, &((sockaddr_in6*)rp->ai_addr)->sin6_addr, buf, sizeof(buf)) == NULL) {
+                    perror("inet_ntop");
+                    exit(1);
+                }
+                break;
+            default:
+                cerr<<"unknown family:"<<rp->ai_family<<endl;
+                break;
+        }
+        //cerr<<"remote addr: "<<buf<<endl;
+        sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (sock == -1) {
+            perror("socket");
+            continue;
+        }
+
+        if (connect(sock, rp->ai_addr, rp->ai_addrlen) == -1) {
+            perror("connect");
+            continue;
+        }
+        cerr<<"Connected to "<<buf<<":"<<remote_port<<endl;
+        break;
     }
-    cerr<<"Connected to "<<remote_ip<<":"<<remote_port<<endl;
+    freeaddrinfo(res);
+    if (rp == NULL) {
+        cerr<<"Can't connect to "<<remote_addr<<":"<<remote_port<<endl;
+        exit(1);
+    }
     
     SetNonBlock(sock);
     SetSockBufSize(sock, 65536, 65536);
 
     MainLoop(sock);
     close(sock);
-    cerr<<"Disonnected to "<<remote_ip<<":"<<remote_port<<endl;
+    cerr<<"Disonnected to "<<buf<<":"<<remote_port<<endl;
     return 0;
 }
