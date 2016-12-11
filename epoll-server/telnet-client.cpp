@@ -24,6 +24,7 @@ void Usage(const string& name) {
 
 bool MainLoop(int sock) {
     fd_set rdfds;
+    FD_ZERO(&rdfds);
     FD_SET(0, &rdfds);
     FD_SET(sock, &rdfds);
     int ret = select(sock + 1, &rdfds, NULL, NULL, NULL);

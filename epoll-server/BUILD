@@ -8,9 +8,9 @@ cc_binary(
 )
 
 cc_binary(
-    name = 'client',
+    name = 'telnet-client',
     srcs = [
-        'client.cpp',
+        'telnet-client.cpp',
         'common.cpp'
     ]
 )

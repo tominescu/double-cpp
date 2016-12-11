@@ -3,16 +3,16 @@ CFLAGS = -std=c++11 -g
 
 .PHONEY: all clean
 
-all: epoll-server client
+all: epoll-server telnet-client
 
 epoll-server: epoll-server.o package.o common.o
 	$(CC) $(CFLAGS) -o $@ $^ 
 
-client: client.o common.o
+telnet-client: telnet-client.o common.o
 	$(CC) $(CFLAGS) -o $@ $^ 
 
 .cpp.o:
 	$(CC) $(CFLAGS) -c -o $@ $^ 
 
 clean:
-	rm -rf epoll-server client *.o
+	rm -rf epoll-server telnet-client *.o
