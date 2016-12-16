@@ -5,11 +5,7 @@ using namespace std;
 
 class SingleDog{
 public:
-    ~SingleDog(){
-        pthread_mutex_destroy(&name_mutex_);
-        pthread_mutex_destroy(&age_mutex_);
-    }
-
+    /*
     static SingleDog* GetInstance() {
         if (!instance_) {
             SingleDog* dog = new SingleDog();
@@ -18,6 +14,13 @@ public:
             }
         }
         return instance_;
+    }
+    */
+
+    // Compile with c++11
+    static SingleDog* GetInstance() {
+        static SingleDog dog;
+        return &dog;
     }
 
     void SetName(const string& name) {
@@ -53,6 +56,10 @@ private:
         name_ = dog.name_;
         age_  = dog.age_;
         return *this;
+    }
+    ~SingleDog(){
+        pthread_mutex_destroy(&name_mutex_);
+        pthread_mutex_destroy(&age_mutex_);
     }
 
 private:
