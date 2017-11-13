@@ -39,7 +39,7 @@ void Heapify(vector<int> & elements, int pos, int n)
 void sort(vector<int> & elements)
 {
     int size = elements.size();
-    for ( int i = size/2 - 1; i > 0; i-- ) {
+    for ( int i = size/2 - 1; i >= 0; i-- ) {
         Heapify(elements, i, size);
     }
 
@@ -59,7 +59,8 @@ void print(const vector<int> & elements)
 
 int main()
 {
-    int arr[] = {9,7,5,3,1,8,6,4,2,0};
+    //int arr[] = {9,7,5,3,1,8,6,4,2,0};
+    int arr[] = {1, 2, 5, 7, 9, 2, 4, 6, 8, 10};
     vector<int> elements(arr, arr+sizeof(arr)/sizeof(int));
     sort(elements);
     print(elements);
