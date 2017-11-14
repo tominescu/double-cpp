@@ -6,6 +6,7 @@ typedef vector<int>::const_iterator Iter;
 
 class Node{
     public:
+        Node(){}
         Node(Iter iter, Iter end_iter):iter_(iter),end_iter_(end_iter){}
         bool hasNext() {
             if (iter_ != end_iter_) {
@@ -24,27 +25,47 @@ class Node{
         Iter end_iter_;
 };
 
-void sort(const vector<vector<int> >& vv, vector<int>& result) {
-    vector<Node*> node_vec;
-    for (size_t i = 0; i < vv.size(); ++i) {
-        Node* node = new Node(vv[i].begin(), vv[i].end());
-        node_vec.push_back(node);
+void heapify(Node* nodes, int root, int len) {
+    int lchild = 2*root + 1;
+    int rchild = 2*root + 2;
+
+    if (lchild >= len) {
+        return;
     }
 
-    while (!node_vec.empty()) {
-        int minIndex = 0;
-        for (size_t i = 1; i < node_vec.size(); i++) {
-            if (node_vec[minIndex]->Val() > node_vec[i]->Val()) {
-                minIndex = i;
-            }
+    int min = lchild;
+    if (rchild < len && nodes[rchild].Val() < nodes[lchild].Val()) {
+        min = rchild;
+    }
+
+    if (nodes[root].Val() > nodes[min].Val()) {
+        Node tmp = nodes[root];
+        nodes[root] = nodes[min];
+        nodes[min] = tmp;
+        heapify(nodes, min, len);
+    }
+}
+
+void sort(const vector<vector<int> >& vv, vector<int>& result) {
+    Node nodes[vv.size()];
+    int heapLen = 0;
+    for (size_t i = 0; i < vv.size(); ++i) {
+        if (vv[i].size() != 0) {
+            nodes[heapLen++] = Node(vv[i].begin(), vv[i].end());
         }
-        result.push_back(node_vec[minIndex]->Val());
-        node_vec[minIndex]->Next();
-        if (!node_vec[minIndex]->hasNext()) {
-            Node* node = node_vec[minIndex];
-            node_vec.erase(node_vec.begin()+minIndex);
-            delete node;
+    }
+
+    for (int i = heapLen/2 - 1; i >= 0; i--) {
+        heapify(nodes, i, heapLen);
+    }
+
+    while (heapLen > 0) {
+        result.push_back(nodes[0].Val());
+        nodes[0].Next();
+        if (!nodes[0].hasNext()) {
+            nodes[0] = nodes[--heapLen];
         }
+        heapify(nodes, 0, heapLen);
     }
 }
 
